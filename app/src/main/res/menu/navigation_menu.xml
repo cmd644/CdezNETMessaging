@@ -1,22 +1,18 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:id="@+id/nav_server"
-        android:title="Server">
-        <menu>
-            <item
-                android:id="@+id/nav_server_address"
-                android:title="Server Address"
-                android:actionLayout="@layout/menu_item_edittext" />
-            <item
-                android:id="@+id/nav_username"
-                android:title="Username"
-                android:actionLayout="@layout/menu_item_edittext" />
-            <item
-                android:id="@+id/nav_chatroom"
-                android:title="Chatroom"
-                android:actionLayout="@layout/menu_item_edittext" />
-        </menu>
-    </item>
+    <group android:checkableBehavior="none">
+        <item
+            android:id="@+id/nav_server_address"
+            android:title="Server Address"
+            android:actionLayout="@layout/menu_edittext" />
+        <item
+            android:id="@+id/nav_username"
+            android:title="Username"
+            android:actionLayout="@layout/menu_edittext" />
+        <item
+            android:id="@+id/nav_chatroom"
+            android:title="Chatroom"
+            android:actionLayout="@layout/menu_edittext" />
+    </group>
     <item
         android:id="@+id/nav_theme"
         android:title="Change Theme" />
