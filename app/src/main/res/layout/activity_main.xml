@@ -14,6 +14,7 @@
         android:layout_height="match_parent">
 
         <com.google.android.material.appbar.AppBarLayout
+            android:id="@+id/app_bar_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
@@ -38,11 +39,14 @@
                 android:id="@+id/message_list"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
+                android:padding="16dp"
+                android:clipToPadding="false"
+                android:visibility="visible"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toTopOf="@id/message_input_layout"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                android:padding="16dp" />
+                tools:listitem="@layout/item_message" />
 
             <!-- Text input and send button -->
             <LinearLayout

@@ -1,6 +1,8 @@
 package pw.cdezselfhosted.cdeznetmessaging
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -12,14 +14,43 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.navigation.NavigationView
 import androidx.appcompat.widget.Toolbar
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import android.widget.Button
+import pw.cdezselfhosted.cdeznetmessaging.api.ChatApi
+import pw.cdezselfhosted.cdeznetmessaging.api.MessageResponse
+import pw.cdezselfhosted.cdeznetmessaging.db.DatabaseHelper
+import android.util.Log
+import android.content.SharedPreferences
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class MainActivity : AppCompatActivity() {
     private lateinit var drawerLayout: DrawerLayout
     private lateinit var navigationView: NavigationView
+    private lateinit var chatApi: ChatApi
+    private lateinit var databaseHelper: DatabaseHelper
+    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var messageAdapter: MessageAdapter
 
-    private var serverAddress: String = "http://localhost:5000"
+    private var serverAddress: String = "http://cdez.net:5000"
     private var username: String = "anonymous"
     private var chatroom: String = "default"
+
+    // Handler for periodic message fetching
+    private val handler = Handler(Looper.getMainLooper())
+    private val fetchMessagesRunnable = object : Runnable {
+        override fun run() {
+            fetchMessageHistory() // Fetch messages from the server
+            handler.postDelayed(this, 5000) // Schedule the next fetch after 5 seconds
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,12 +78,38 @@ class MainActivity : AppCompatActivity() {
         drawerLayout.addDrawerListener(toggle)
         toggle.syncState()
 
+        // Initialize Retrofit
+        val retrofit = Retrofit.Builder()
+            .baseUrl(serverAddress)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        chatApi = retrofit.create(ChatApi::class.java)
+
+        // Initialize DatabaseHelper
+        databaseHelper = DatabaseHelper(this)
+
+        // Initialize SharedPreferences
+        sharedPreferences = getSharedPreferences("CdezNETMessagingPrefs", MODE_PRIVATE)
+
+        // Initialize RecyclerView and Adapter
+        val recyclerView = findViewById<RecyclerView>(R.id.message_list)
+        messageAdapter = MessageAdapter()
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerView.adapter = messageAdapter
+
+        // Load messages from the database
+        loadMessagesFromDatabase()
+
+        // Load preferences
+        loadFromPreferences()
+
         // Handle menu item clicks
         navigationView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.nav_server_address -> {
                     showInputDialog("Server Address", serverAddress) { newValue ->
                         serverAddress = newValue
+                        saveToPreferences("serverAddress", serverAddress)
                         Toast.makeText(this, "Server Address updated to $serverAddress", Toast.LENGTH_SHORT).show()
                     }
                     true
@@ -60,6 +117,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_username -> {
                     showInputDialog("Username", username) { newValue ->
                         username = newValue
+                        saveToPreferences("username", username)
                         Toast.makeText(this, "Username updated to $username", Toast.LENGTH_SHORT).show()
                     }
                     true
@@ -67,29 +125,148 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_chatroom -> {
                     showInputDialog("Chatroom", chatroom) { newValue ->
                         chatroom = newValue
+                        saveToPreferences("chatroom", chatroom)
                         Toast.makeText(this, "Chatroom updated to $chatroom", Toast.LENGTH_SHORT).show()
                     }
-                    true
-                }
-                R.id.nav_theme -> {
-                    Toast.makeText(this, "Theme changed!", Toast.LENGTH_SHORT).show()
-                    true
-                }
-                R.id.nav_connect -> {
-                    Toast.makeText(this, "Connect/Disconnect clicked!", Toast.LENGTH_SHORT).show()
                     true
                 }
                 else -> false
             }
         }
+
+        val sendButton = findViewById<Button>(R.id.send_button)
+        val messageInput = findViewById<EditText>(R.id.message_input)
+
+        sendButton.setOnClickListener {
+            val message = messageInput.text.toString()
+            if (message.isNotEmpty()) {
+                sendMessage(message)
+                messageInput.text.clear()
+            } else {
+                Toast.makeText(this, "Message cannot be empty", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // Start periodic message fetching
+        handler.post(fetchMessagesRunnable)
     }
 
-    /**
-     * Show an input dialog to update a value.
-     * @param title The title of the dialog.
-     * @param currentValue The current value to display in the input field.
-     * @param onValueChanged Callback to handle the updated value.
-     */
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacks(fetchMessagesRunnable) // Stop periodic fetching to prevent memory leaks
+    }
+
+    private fun loadMessagesFromDatabase() {
+        val messages = databaseHelper.getMessagesForChatRoom(chatroom)
+            .sortedBy { it.timestamp } // Sort messages by timestamp in ascending order
+        Log.d("MainActivity", "Loaded messages: $messages") // Debugging log
+
+        // Update the adapter's data
+        messageAdapter.submitList(messages)
+    }
+
+    private fun fetchMessageHistory() {
+        chatApi.getMessageHistory(chatroom).enqueue(object : Callback<MessageResponse> {
+            override fun onResponse(call: Call<MessageResponse>, response: Response<MessageResponse>) {
+                if (response.isSuccessful) {
+                    val rawMessages = response.body()?.messages ?: emptyList()
+                    Log.d("fetchMessageHistory", "Fetched raw messages from API: $rawMessages")
+
+                    val messages = rawMessages.map { rawMessage ->
+                        try {
+                            val regex = Regex("""\[(.*?)\] (.*?): (.*)""") // Matches "[timestamp] username: message"
+                            val matchResult = regex.matchEntire(rawMessage)
+
+                            if (matchResult != null) {
+                                val (rawTimestamp, username, message) = matchResult.destructured
+
+                                // Interpret the server's timestamp as UTC
+                                val utcFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).apply {
+                                    timeZone = TimeZone.getTimeZone("UTC")
+                                }
+                                val utcTimestamp = utcFormat.format(utcFormat.parse(rawTimestamp)!!)
+
+                                Message(
+                                    username = username.ifEmpty { "Unknown" },
+                                    chatRoom = chatroom,
+                                    message = message,
+                                    timestamp = utcTimestamp
+                                )
+                            } else {
+                                Log.e("fetchMessageHistory", "Failed to parse message: $rawMessage")
+                                Message(
+                                    username = "Unknown",
+                                    chatRoom = chatroom,
+                                    message = rawMessage,
+                                    timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(System.currentTimeMillis())
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Log.e("fetchMessageHistory", "Error parsing message: $rawMessage", e)
+                            Message(
+                                username = "Unknown",
+                                chatRoom = chatroom,
+                                message = rawMessage,
+                                timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(System.currentTimeMillis())
+                            )
+                        }
+                    }
+
+                    // Insert messages into the database, avoiding duplicates
+                    for (msg in messages) {
+                        databaseHelper.insertMessage(msg.username, msg.chatRoom, msg.message, msg.timestamp)
+                    }
+
+                    loadMessagesFromDatabase()
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "Failed to fetch history: ${response.message()}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+
+            override fun onFailure(call: Call<MessageResponse>, t: Throwable) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
+    }
+
+    private fun sendMessage(message: String) {
+        // Create a UTC timestamp
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(System.currentTimeMillis())
+
+        // Create a message object with the UTC timestamp
+        val messageObj = Message(username, chatroom, message, timestamp)
+
+        chatApi.sendMessage(messageObj).enqueue(object : Callback<MessageResponse> {
+            override fun onResponse(call: Call<MessageResponse>, response: Response<MessageResponse>) {
+                if (response.isSuccessful) {
+                    // Insert the message into the database with the same UTC timestamp
+                    databaseHelper.insertMessage(username, chatroom, message, timestamp)
+
+                    // Reload messages from the database
+                    loadMessagesFromDatabase()
+
+                    // Scroll to the bottom of the RecyclerView
+                    val recyclerView = findViewById<RecyclerView>(R.id.message_list)
+                    recyclerView.scrollToPosition(messageAdapter.itemCount - 1)
+
+                    Toast.makeText(this@MainActivity, "Message sent!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Failed to send message: ${response.message()}", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<MessageResponse>, t: Throwable) {
+                Toast.makeText(this@MainActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
     private fun showInputDialog(title: String, currentValue: String, onValueChanged: (String) -> Unit) {
         val input = EditText(this)
         input.setText(currentValue)
@@ -107,5 +284,17 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun saveToPreferences(key: String, value: String) {
+        val editor = sharedPreferences.edit()
+        editor.putString(key, value)
+        editor.apply()
+    }
+
+    private fun loadFromPreferences() {
+        serverAddress = sharedPreferences.getString("serverAddress", "http://cdez.net:5000") ?: "http://cdez.net:5000"
+        username = sharedPreferences.getString("username", "anonymous") ?: "anonymous"
+        chatroom = sharedPreferences.getString("chatroom", "default") ?: "default"
     }
 }
