@@ -1,8 +1,14 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.CdezNETMessaging" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <!-- Toolbar color -->
+        <item name="colorPrimary">#2D7DD2</item>
+        <item name="colorPrimaryVariant">#2A6CB0</item> <!-- Optional: A darker shade -->
+        <item name="colorOnPrimary">#FFFFFF</item> <!-- Text/icon color on the toolbar -->
+
+        <!-- Status bar color -->
+        <item name="android:statusBarColor">#2D7DD2</item>
+        <item name="android:windowLightStatusBar">false</item> <!-- Ensures white text/icons on the status bar -->
     </style>
 
     <style name="Theme.CdezNETMessaging" parent="Base.Theme.CdezNETMessaging" />

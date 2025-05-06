@@ -30,6 +30,8 @@ import android.content.SharedPreferences
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import android.os.Build
+import android.graphics.Color
 
 class MainActivity : AppCompatActivity() {
     private lateinit var drawerLayout: DrawerLayout
@@ -61,6 +63,10 @@ class MainActivity : AppCompatActivity() {
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            window.statusBarColor = Color.parseColor("#2D7DD2")
         }
 
         drawerLayout = findViewById(R.id.drawer_layout)
