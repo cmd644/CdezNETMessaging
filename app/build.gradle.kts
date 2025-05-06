@@ -51,6 +51,9 @@ dependencies {
     // Kotlin Coroutines for asynchronous operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
+    // Markwon Markdown renderer
+    implementation("io.noties.markwon:core:4.6.2")
+
     // Testing libraries
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
     private val fetchMessagesRunnable = object : Runnable {
         override fun run() {
             fetchMessageHistory() // Fetch messages from the server
-            handler.postDelayed(this, 5000) // Schedule the next fetch after 5 seconds
+            handler.postDelayed(this, 1000) // Schedule the next fetch after 1 second
         }
     }
 
@@ -127,6 +127,16 @@ class MainActivity : AppCompatActivity() {
                         chatroom = newValue
                         saveToPreferences("chatroom", chatroom)
                         Toast.makeText(this, "Chatroom updated to $chatroom", Toast.LENGTH_SHORT).show()
+
+                        // Clear the RecyclerView
+                        messageAdapter.submitList(emptyList())
+
+                        // Reload messages for the new chatroom
+                        loadMessagesFromDatabase()
+
+                        // Restart periodic fetching for the new chatroom
+                        handler.removeCallbacks(fetchMessagesRunnable)
+                        handler.post(fetchMessagesRunnable)
                     }
                     true
                 }
@@ -159,7 +169,7 @@ class MainActivity : AppCompatActivity() {
     private fun loadMessagesFromDatabase() {
         val messages = databaseHelper.getMessagesForChatRoom(chatroom)
             .sortedBy { it.timestamp } // Sort messages by timestamp in ascending order
-        Log.d("MainActivity", "Loaded messages: $messages") // Debugging log
+        Log.d("MainActivity", "Loaded messages for chatroom '$chatroom': $messages") // Debugging log
 
         // Update the adapter's data
         messageAdapter.submitList(messages)
@@ -239,8 +249,12 @@ class MainActivity : AppCompatActivity() {
             timeZone = TimeZone.getTimeZone("UTC")
         }.format(System.currentTimeMillis())
 
-        // Create a message object with the UTC timestamp
-        val messageObj = Message(username, chatroom, message, timestamp)
+        // Create a message object with the correct chatroom and UTC timestamp
+        val messageObj = pw.cdezselfhosted.cdeznetmessaging.api.Message(
+            username = username,
+            chat_room = chatroom, // Ensure the correct chatroom is used
+            message = message
+        )
 
         chatApi.sendMessage(messageObj).enqueue(object : Callback<MessageResponse> {
             override fun onResponse(call: Call<MessageResponse>, response: Response<MessageResponse>) {

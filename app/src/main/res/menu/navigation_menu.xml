@@ -17,6 +17,6 @@
         android:id="@+id/nav_theme"
         android:title="Change Theme" />
     <item
-        android:id="@+id/nav_connect"
-        android:title="Connect/Disconnect" />
+        android:id="@+id/nav_clear_messages"
+        android:title="Clear Messages" />
 </menu>

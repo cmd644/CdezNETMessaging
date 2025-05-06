@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import io.noties.markwon.Markwon
 
 class MessageAdapter : RecyclerView.Adapter<MessageAdapter.MessageViewHolder>() {
 
@@ -37,8 +38,11 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.MessageViewHolder>() 
 
         fun bind(message: Message) {
             usernameTextView.text = message.username
-            messageTextView.text = message.message
             timestampTextView.text = message.timestamp
+
+            // Render Markdown in the message content
+            val markwon = Markwon.create(itemView.context)
+            markwon.setMarkdown(messageTextView, message.message)
         }
     }
 }
