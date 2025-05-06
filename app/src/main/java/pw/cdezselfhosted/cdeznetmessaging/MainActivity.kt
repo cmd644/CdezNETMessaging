@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private var serverAddress: String = "http://cdez.net:5000"
     private var username: String = "anonymous"
     private var chatroom: String = "default"
+    private var lastMessageCount = 0 // Track the number of messages
 
     // Handler for periodic message fetching
     private val handler = Handler(Looper.getMainLooper())
@@ -173,6 +174,15 @@ class MainActivity : AppCompatActivity() {
 
         // Update the adapter's data
         messageAdapter.submitList(messages)
+
+        // Scroll to the newest message only if new messages have been added
+        if (messages.size > lastMessageCount) {
+            val recyclerView = findViewById<RecyclerView>(R.id.message_list)
+            recyclerView.scrollToPosition(messages.size - 1)
+        }
+
+        // Update the last message count
+        lastMessageCount = messages.size
     }
 
     private fun fetchMessageHistory() {
@@ -204,62 +214,46 @@ class MainActivity : AppCompatActivity() {
                                 )
                             } else {
                                 Log.e("fetchMessageHistory", "Failed to parse message: $rawMessage")
-                                Message(
-                                    username = "Unknown",
-                                    chatRoom = chatroom,
-                                    message = rawMessage,
-                                    timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(System.currentTimeMillis())
-                                )
+                                null
                             }
                         } catch (e: Exception) {
                             Log.e("fetchMessageHistory", "Error parsing message: $rawMessage", e)
-                            Message(
-                                username = "Unknown",
-                                chatRoom = chatroom,
-                                message = rawMessage,
-                                timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(System.currentTimeMillis())
-                            )
+                            null
                         }
-                    }
+                    }.filterNotNull()
 
-                    // Insert messages into the database, avoiding duplicates
+                    // Insert messages into the database
                     for (msg in messages) {
                         databaseHelper.insertMessage(msg.username, msg.chatRoom, msg.message, msg.timestamp)
                     }
 
+                    // Reload messages from the database
                     loadMessagesFromDatabase()
                 } else {
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "Failed to fetch history: ${response.message()}", Toast.LENGTH_SHORT).show()
-                    }
+                    Toast.makeText(this@MainActivity, "Failed to fetch history: ${response.message()}", Toast.LENGTH_SHORT).show()
                 }
             }
 
             override fun onFailure(call: Call<MessageResponse>, t: Throwable) {
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
-                }
+                Toast.makeText(this@MainActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
             }
         })
     }
 
     private fun sendMessage(message: String) {
-        // Create a UTC timestamp
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }.format(System.currentTimeMillis())
 
-        // Create a message object with the correct chatroom and UTC timestamp
         val messageObj = pw.cdezselfhosted.cdeznetmessaging.api.Message(
             username = username,
-            chat_room = chatroom, // Ensure the correct chatroom is used
+            chat_room = chatroom,
             message = message
         )
 
         chatApi.sendMessage(messageObj).enqueue(object : Callback<MessageResponse> {
             override fun onResponse(call: Call<MessageResponse>, response: Response<MessageResponse>) {
                 if (response.isSuccessful) {
-                    // Insert the message into the database with the same UTC timestamp
                     databaseHelper.insertMessage(username, chatroom, message, timestamp)
 
                     // Reload messages from the database
