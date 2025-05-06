@@ -1,5 +1,7 @@
 package pw.cdezselfhosted.cdeznetmessaging
 
+import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -40,9 +42,12 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.MessageViewHolder>() 
             usernameTextView.text = message.username
             timestampTextView.text = message.timestamp
 
-            // Render Markdown in the message content
+            // Render Markdown with clickable links
             val markwon = Markwon.create(itemView.context)
             markwon.setMarkdown(messageTextView, message.message)
+
+            // Enable link movement method for clickable links
+            messageTextView.movementMethod = LinkMovementMethod.getInstance()
         }
     }
 }
