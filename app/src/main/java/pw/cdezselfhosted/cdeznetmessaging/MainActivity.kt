@@ -147,6 +147,12 @@ class MainActivity : AppCompatActivity() {
                     }
                     true
                 }
+                R.id.nav_clear_messages -> {
+                    // Clear the RecyclerView
+                    messageAdapter.submitList(emptyList())
+                    Toast.makeText(this, "Messages cleared!", Toast.LENGTH_SHORT).show()
+                    true
+                }
                 else -> false
             }
         }
